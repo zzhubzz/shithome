@@ -1,0 +1,88 @@
+
+#include <DHT11.h>
+#include "EspMQTTClient.h"
+#include "PMS.h"
+
+EspMQTTClient client(
+  "ssid",
+  "wifi passwd",
+  "MQTT Broker server ip",  // 
+  "MQTT user ID",   // 
+  "MQTT password",   // 
+  "Client name that uniquely identify your device",     // 
+  1883              // The MQTT port, default to 1883. this line can be omitted
+);
+
+DHT11 dht11(2);
+PMS pms(Serial);
+PMS::DATA data;
+char aqdt[100];
+char tmp[100];
+int n;
+
+
+void setup()
+{
+  Serial.begin(9600); 
+}
+
+void onConnectionEstablished()
+{  
+}
+
+void loop()
+{
+  n=0;
+  while (pms.read(data)==false)
+  {
+    if(n==120){
+     Serial.println("PMS timeout!");
+     ESP.restart();
+    }
+    delay(1000);
+    Serial.print("p");
+    n=n+1;
+  }
+  sprintf(aqdt,"{\"pm2p5\":%d,\"pm1p0\":%d,\"pm10\":%d}",data.PM_AE_UG_2_5,data.PM_AE_UG_1_0,data.PM_AE_UG_10_0);  
+  Serial.println(aqdt); 
+
+  int temperature = 0;
+  int humidity = 0;
+ /* int result = 1;
+  n=0;
+  while (result != 0) {
+    if(n==120){
+      Serial.println("TMP timeout!");
+      int errorCode = 0;
+      dht11.getErrorString(errorCode);
+      Serial.println(errorCode);
+      ESP.restart();
+    }
+    int result = dht11.readTemperatureHumidity(temperature, humidity);
+    delay(1000);
+    Serial.print("t");
+    n=n+1;
+  }*/
+  dht11.readTemperatureHumidity(temperature, humidity);
+  sprintf(tmp,"{\"tem\":%d,\"hmd\":%d}",temperature,humidity);   
+  Serial.print("Temperature: ");
+  Serial.print(temperature);
+  Serial.print(" °C\tHumidity: ");
+  Serial.print(humidity);
+  Serial.println(" %");
+
+  client.loop();
+  n=0;
+  while (client.isConnected()==0){
+    client.loop();
+     if(n==60){
+      Serial.println("CNT timeout!");
+      ESP.restart();
+    }
+    delay(1000);
+    Serial.print("c");
+    n=n+1;
+  }
+  client.publish("AQI", aqdt);
+  client.publish("AQI", tmp);
+}
